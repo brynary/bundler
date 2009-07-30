@@ -53,9 +53,11 @@ module Spec
 
     def have_cached_gems(*gems)
       simple_matcher("have cached gems") do |given, matcher|
+        given = Pathname.new(given)
         gems.all? do |name|
           matcher.failure_message = "Gem #{name} was not cached"
-          File.exists?(File.join(given, "cache", "#{name}.gem"))
+          matcher.negative_failure_message = "Gem #{name} was cached"
+          given.join("cache", "#{name}.gem").file?
         end
       end
     end
@@ -64,15 +66,34 @@ module Spec
 
     def have_installed_gems(*gems)
       simple_matcher("have installed gems") do |given, matcher|
+        given = Pathname.new(given)
         gems.all? do |name|
           matcher.failure_message = "Gem #{name} was not installed"
-          File.exists?(File.join(given, "specifications", "#{name}.gemspec")) &&
-          File.directory?(File.join(given, "gems", "#{name}"))
+          matcher.negative_failure_message = "Gem #{name} was installed"
+          given.join("specifications", "#{name}.gemspec").file? &&
+            given.join("gems", name).directory?
         end
       end
     end
 
     alias have_installed_gem have_installed_gems
+
+    def have_gems(*gems)
+      simple_matcher("have gems") do |given, matcher|
+        matcher.negative_failure_message = gems.length == 1 ?
+          "Gem #{gems.first} was installed" :
+          "Gems #{gems.map {|g| g.to_s}.join(', ')} were all installed"
+        [have_cached_gems(*gems), have_installed_gems(*gems)].each do |m|
+          unless m.matches?(given)
+            matcher.failure_message = m.failure_message
+            return
+          end
+        end
+        true
+      end
+    end
+
+    alias have_gem have_gems
 
     def have_log_message(message)
       simple_matcher("have log message") do |given, matcher|
